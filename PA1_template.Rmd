@@ -1,25 +1,145 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "PA1_template.Rmd"
+author: "Juan Jurado"
+date: "28/6/2018"
+output: html_document
 ---
 
+# Analyzing activity monitoring data: Course Project 1
 
 ## Loading and preprocessing the data
 
+I already have our working directory. Now, I read the data:
+```{r reading_data}
+activity <- read.csv("activity.csv")
+```
+
+I check a few point of these dataset:
+```{r checking data}
+head(activity)
+str(activity)
+summary(activity)
+```
+I can see there are 2304 NAs in "steps".
 
 
-## What is mean total number of steps taken per day?
+## What is mean total number of steps taken per day? 
 
+I call ggplot2 package and I make the histogram:
+```{r histogram}
+library(ggplot2)
+steps_per_day <- tapply(activity$steps, activity$date, FUN = sum, na.rm=TRUE) 
+qplot(steps_per_day, xlab = "Total number of steps taken per day", binwidth=500)
+```
+
+
+Mean and median number of steps each day
+
+Mean:
+```{r mean}
+mean(steps_per_day)
+```
+Median:
+```{r median}
+median(steps_per_day)
+```
+Just to make sure everything is OK:
+```{r summary steps}
+summary(steps_per_day)
+```
 
 
 ## What is the average daily activity pattern?
 
+I aggregate the data and I show a plot wiht ggplot2 package.
 
+```{r average daily activity}
+average_daily_activity <- aggregate(x=list(steps=activity$steps), by=list(interval=activity$interval), FUN = mean, na.rm = TRUE)
+
+avg_daily_act_plot <- ggplot(average_daily_activity, aes(interval,steps)) + geom_line()
+avg_daily_act_plot
+
+```
+
+To get which 5-minute interval contains the maximum number of steps:
+```{r maximum number of steps}
+average_daily_activity[which.max(average_daily_activity$steps),]
+
+```
+Interval 835 has the maximum number of steps.
 
 ## Imputing missing values
 
+I look for missing values:
+```{r missing values}
+missing_values <- is.na(activity$steps)
+table(missing_values)
+```
+There are 2.304 missing values, as I saw before.
+
+Now, I fill in all the missing values.
+```{r filling in}
+filling_activity <- function(steps, interval){
+        filled <- NA
+        if(!is.na(steps))
+                filled <-c(steps)
+        else
+                filled <- (average_daily_activity[average_daily_activity$interval == interval, "steps"])
+        return(filled)
+}
+filled_activity <- activity
+filled_activity$steps <- mapply(filling_activity, filled_activity$steps, filled_activity$interval)
+
+```
+
+I check if there are still missing values:
+```{r checking missing values}
+summary(filled_activity)
+```
+There is no missing values now.
+
+
+I prepare the dataset to make the histogram:
+```{r histogram no missing}
+steps_per_day_v2 <- tapply(filled_activity$steps, filled_activity$date, FUN = sum)
+qplot(steps_per_day_v2, binwidth = 500, xlab = "Total number of steps taken per day")
+
+```
+
+Mean and median for this new dataset:
+```{r mean and median new}
+mean(steps_per_day_v2)
+median(steps_per_day_v2)
+```
+These values differ from the previous ones because the NA values have been replaced by mean values. Mean values are higher than the most of the values before, thats why values in steps_per_day_v2 are higher.
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+Fist, lets find if days are midweek or weekends
+```{r weekdays}
+
+wday <- function(date){
+        day <- weekdays(date)
+        if (day %in% c("lunes", "martes", "miércoles", "jueves", "viernes"))
+                return("midweek")
+        else if (day %in% c("sábado", "domingo"))
+                return("weekend")
+        else
+                stop("error")
+                
+}
+filled_activity$date <- as.Date(filled_activity$date)
+filled_activity$day <- sapply(filled_activity$date, FUN = wday)
+
+```
+
+
+Finally, I make a time series plot:
+```{r weekday plot}
+average_daily_activity_v2 <- aggregate(steps ~ interval + day, data = filled_activity, mean)
+ggplot(average_daily_activity_v2, aes(interval, steps)) + geom_line() + facet_grid(day ~.) + xlab("5-minute interval") + ylab("average number of steps taken")
+
+```
+
+
